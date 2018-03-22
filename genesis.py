@@ -18,7 +18,7 @@ def main():
 
   block_header        = create_block_header(hash_merkle_root, options.time, options.bits, options.nonce)
   genesis_hash, nonce = generate_hash(block_header, algorithm, options.nonce, options.bits)
-  announce_found_genesis(genesis_hash, nonce)
+  announce_found_genesis(genesis_hash, nonce, options, hash_merkle_root)
 
 
 def get_args():
@@ -208,12 +208,29 @@ def print_block_info(options, hash_merkle_root):
   print "bits: "         + str(hex(options.bits))
 
 
-def announce_found_genesis(genesis_hash, nonce):
+def announce_found_genesis(genesis_hash, nonce, options, hash_merkle_root):
   """ Announces the genesis hash block """
   print "genesis hash found!"
   print "nonce: "        + str(nonce)
   print "genesis hash: " + genesis_hash.encode('hex_codec')
-
+  print()
+  print "const char* pszTimestamp = \"" + options.timestamp + "\";"
+  print()
+  print "txNew.vin[0].scriptSig = CScript() << " + str(hex(options.bits)) + " << CScriptNum(4) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));"
+  print()
+  print "txNew.vout[0].scriptPubKey = CScript() << ParseHex(\"" + options.pubkey + "\") << OP_CHECKSIG;"
+  print()
+  print "genesis.nTime = " + str(options.time) + ";"
+  print "genesis.nBits = " + str(hex(options.bits)) + ";"
+  print "genesis.nNonce = " + str(nonce) + ";"
+  print()
+  print "assert(hashGenesisBlock == uint256(\"0x" + genesis_hash.encode('hex_codec') + "\"));"
+  print "assert(genesis.hashMerkleRoot == uint256(\"0x" + hash_merkle_root[::-1].encode('hex_codec') + "\"));" 
+  print()
+  print "static Checkpoints::MapCheckpoints mapCheckpoints ="
+  print "    boost::assign::map_list_of(0, uint256(\"0x" + genesis_hash.encode('hex_codec') + "\"));"
+  print()
+  print "    " + str(options.time) + ", // * UNIX timestamp of last checkpoint block"
 
 # GOGOGO!
 main()
