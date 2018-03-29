@@ -7,6 +7,9 @@ from construct import *
 
 def main():
   options = get_args()
+  
+  if options.mota:
+    options.pubkey = ''
 
   algorithm = get_algorithm(options)
 
@@ -15,12 +18,12 @@ def main():
   # hash merkle root is the double sha256 hash of the transaction(s)
   tx = create_transaction(input_script, output_script,options)
   
-  if options.debug
-    for i in range(0, len(tx)):      
-    if (i % 16 == 0):
-        print ()  
-    mm = int(tx[i].encode('hex'), 16)
-    print ('0x{0:0{1}x} '.format(mm,2), end='')
+  if options.debug:
+    for i in range(0, len(tx)):
+        if (i % 16 == 0):
+          print ()  
+        mm = int(tx[i].encode('hex'), 16)
+        print ('0x{0:0{1}x} '.format(mm,2), end='')
     print ('\n')
 
   hash_merkle_root = hashlib.sha256(hashlib.sha256(tx).digest()).digest()
@@ -85,12 +88,8 @@ def create_input_script(options):
       
 
 def create_output_script(options):
-  if options.mota:
-    script_len = ''
-    script = script_len + '';    # normally pubkey
-    if options.debug:
-      print ('*output_script: ' + script)
-    return (script).decode('hex');
+  if options.pubkey == '':
+    return ''
   else:
     script_len = '41'
     OP_CHECKSIG = 'ac'
@@ -99,35 +98,20 @@ def create_output_script(options):
 def create_transaction(input_script, output_script, options):
   """ Creates a transaction block from input and output scripts """
    
-  if options.mota:
-    transaction = Struct("transaction",
-    Bytes("version", 4),
-    Bytes('time', 4),
-    Byte("num_inputs"),
-    StaticField("prev_output", 32),
-    UBInt32('prev_out_idx'),
-    Byte('input_script_len'),
-    Bytes('input_script', len(input_script)),
-    UBInt32('sequence'),
-    Byte('num_outputs'),
-    Bytes('out_value', 8),
-    Byte('output_script_len'),
-#    Bytes('output_script',  0x01),
-    UBInt32('locktime'))
-  else:
-    transaction = Struct("transaction",
-    Bytes("version", 4),
-    Byte("num_inputs"),
-    StaticField("prev_output", 32),
-    UBInt32('prev_out_idx'),
-    Byte('input_script_len'),
-    Bytes('input_script', len(input_script)),
-    UBInt32('sequence'),
-    Byte('num_outputs'),
-    Bytes('out_value', 8),
-    Byte('output_script_len'),
-    Bytes('output_script',  0x43),
-    UBInt32('locktime'))
+  transaction = Struct("transaction",
+  Bytes("version", 4),
+  Bytes('time', 4),
+  Byte("num_inputs"),
+  StaticField("prev_output", 32),
+  UBInt32('prev_out_idx'),
+  Byte('input_script_len'),
+  Bytes('input_script', len(input_script)),
+  UBInt32('sequence'),
+  Byte('num_outputs'),
+  Bytes('out_value', 8),
+  Byte('output_script_len'),
+  Bytes('output_script', len(output_script)),
+  UBInt32('locktime'))
 
   tx = transaction.parse('\x00'*(127 + len(input_script)))
   tx.version           = struct.pack('<I', 1)
@@ -141,13 +125,8 @@ def create_transaction(input_script, output_script, options):
   tx.num_outputs       = 1
   tx.out_value         = struct.pack('<q' ,options.value)#0x000005f5e100)#012a05f200) #50 coins
   #tx.out_value         = struct.pack('<q' ,0x000000012a05f200) #50 coins
-  if options.mota:
-    tx.output_script_len = 0x00
-    tx.output_script     = output_script
-  else:
-    tx.output_script_len = 0x43
-    tx.output_script     = output_script
-
+  tx.output_script_len = len(output_script)
+  tx.output_script     = output_script
   tx.locktime          = 0
   return transaction.build(tx)
 
