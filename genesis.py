@@ -1,4 +1,6 @@
+from __future__ import print_function
 import hashlib, binascii, struct, array, os, time, sys, optparse
+import hexdump
 #import scrypt
 
 from construct import *
@@ -9,10 +11,24 @@ def main():
 
   algorithm = get_algorithm(options)
 
-  input_script  = create_input_script(options.timestamp)
-  output_script = create_output_script(options.pubkey)
+  input_script  = create_input_script(options)
+  output_script = create_output_script(options)
   # hash merkle root is the double sha256 hash of the transaction(s)
   tx = create_transaction(input_script, output_script,options)
+  print ('tx == ' + tx.encode('hex'))
+  print (":".join("{:02x}".format(ord(c)) for c in tx))
+  hexdump.dump(tx, sep=' ')
+  print ('\n')
+  for i in range(0, len(tx)):      
+    if (i % 16 == 0):
+        print ()  
+    mm = int(tx[i].encode('hex'), 16)
+#    print (hex(mm), sep=':', end=' ' )
+    print ('0x{0:0{1}x} '.format(mm,2), end='')
+
+
+  print ('\n')
+
   hash_merkle_root = hashlib.sha256(hashlib.sha256(tx).digest()).digest()
   print_block_info(options, hash_merkle_root)
 
@@ -37,6 +53,8 @@ def get_args():
                    type="int", help="the value in coins for the output, full value (exp. in bitcoin 5000000000 - To get other coins value: Block Value * 100000000)")
   parser.add_option("-b", "--bits", dest="bits",
                    type="int", help="the target in compact representation, associated to a difficulty of 1")
+  parser.add_option("-d", "--debug", action="store_true", dest="debug")
+  parser.add_option("-m", "--mota", action="store_true", dest="mota")
 
   (options, args) = parser.parse_args()
   if not options.bits:
@@ -53,25 +71,57 @@ def get_algorithm(options):
   else:
     sys.exit("Error: Given algorithm must be one of: " + str(supported_algorithms))
 
-def create_input_script(psz_timestamp):
-  psz_prefix = ""
-  #use OP_PUSHDATA1 if required
-  if len(psz_timestamp) > 76: psz_prefix = '4c'
+def create_input_script(options):
+  if options.mota:
+      # 0 42 POTUS Tweets:'And yet, there is NO COLLUSION!'
+      # -> 00012a2e504f545553205477656574733a27416e64207965742c207468657265206973204e4f20434f4c4c5553494f4e2127
+      script_prefix = '00012a' + chr(len(options.timestamp)).encode('hex')
+      script = script_prefix + options.timestamp.encode('hex')
+      if options.debug:
+        print ('*input_script: ' + script)
+      return (script).decode('hex')
+  else:
+    psz_prefix = ""
+    #use OP_PUSHDATA1 if required
+    if len(options.timestamp) > 76: psz_prefix = '4c'
 
-  script_prefix = '04ffff001d0104' + psz_prefix + chr(len(psz_timestamp)).encode('hex')
-  print (script_prefix + psz_timestamp.encode('hex'))
-  return (script_prefix + psz_timestamp.encode('hex')).decode('hex')
+    script_prefix = '04ffff001d0104' + psz_prefix + chr(len(options.timestamp)).encode('hex')
+    print (script_prefix + options.timestamp.encode('hex'))
+    return (script_prefix + options.timestamp.encode('hex')).decode('hex')
+      
 
+def create_output_script(options):
+  if options.mota:
+    script_len = ''
+    script = script_len + '';    # normally pubkey
+    if options.debug:
+      print ('*output_script: ' + script)
+    return (script).decode('hex');
+  else:
+    script_len = '41'
+    OP_CHECKSIG = 'ac'
+    return (script_len + options.pubkey + OP_CHECKSIG).decode('hex')  
 
-def create_output_script(pubkey):
-  script_len = '41'
-  OP_CHECKSIG = 'ac'
-  return (script_len + pubkey + OP_CHECKSIG).decode('hex')
-
-
-def create_transaction(input_script, output_script,options):
+def create_transaction(input_script, output_script, options):
   """ Creates a transaction block from input and output scripts """
-  transaction = Struct("transaction",
+   
+  if options.mota:
+    transaction = Struct("transaction",
+    Bytes("version", 4),
+    Bytes('time', 4),
+    Byte("num_inputs"),
+    StaticField("prev_output", 32),
+    UBInt32('prev_out_idx'),
+    Byte('input_script_len'),
+    Bytes('input_script', len(input_script)),
+    UBInt32('sequence'),
+    Byte('num_outputs'),
+    Bytes('out_value', 8),
+    Byte('output_script_len'),
+#    Bytes('output_script',  0x01),
+    UBInt32('locktime'))
+  else:
+    transaction = Struct("transaction",
     Bytes("version", 4),
     Byte("num_inputs"),
     StaticField("prev_output", 32),
@@ -87,17 +137,24 @@ def create_transaction(input_script, output_script,options):
 
   tx = transaction.parse('\x00'*(127 + len(input_script)))
   tx.version           = struct.pack('<I', 1)
+  tx.time              = struct.pack('<I', options.time)
   tx.num_inputs        = 1
   tx.prev_output       = struct.pack('<qqqq', 0,0,0,0)
   tx.prev_out_idx      = 0xFFFFFFFF
   tx.input_script_len  = len(input_script)
   tx.input_script      = input_script
-  tx.sequence          = 0xFFFFFFFF
+  if options.mota:
+    tx.sequence          = 0xFFFFFFFF
   tx.num_outputs       = 1
   tx.out_value         = struct.pack('<q' ,options.value)#0x000005f5e100)#012a05f200) #50 coins
   #tx.out_value         = struct.pack('<q' ,0x000000012a05f200) #50 coins
-  tx.output_script_len = 0x43
-  tx.output_script     = output_script
+  if options.mota:
+    tx.output_script_len = 0x00
+    tx.output_script     = output_script
+  else:
+    tx.output_script_len = 0x43
+    tx.output_script     = output_script
+
   tx.locktime          = 0
   return transaction.build(tx)
 
@@ -124,7 +181,7 @@ def create_block_header(hash_merkle_root, time, bits, nonce):
 # https://en.bitcoin.it/wiki/Block_hashing_algorithm
 def generate_hash(data_block, algorithm, start_nonce, bits):
   """ Generates hash from block using specified algorithm, nonce and bits """
-  print 'Searching for genesis hash..'
+  print ('Searching for genesis hash..')
   nonce           = start_nonce
   last_updated    = time.time()
   # https://en.bitcoin.it/wiki/Difficulty
@@ -200,37 +257,37 @@ def calculate_hashrate(nonce, last_updated):
 
 def print_block_info(options, hash_merkle_root):
   """ Pretty prints info on the created block """
-  print "algorithm: "    + (options.algorithm)
-  print "merkle hash: "  + hash_merkle_root[::-1].encode('hex_codec')
-  print "pszTimestamp: " + options.timestamp
-  print "pubkey: "       + options.pubkey
-  print "time: "         + str(options.time)
-  print "bits: "         + str(hex(options.bits))
+  print ("algorithm: "    + (options.algorithm))
+  print ("merkle hash: "  + hash_merkle_root[::-1].encode('hex_codec'))
+  print ("pszTimestamp: " + options.timestamp)
+  print ("pubkey: "       + options.pubkey)
+  print ("time: "         + str(options.time))
+  print ("bits: "         + str(hex(options.bits)))
 
 
 def announce_found_genesis(genesis_hash, nonce, options, hash_merkle_root):
   """ Announces the genesis hash block """
-  print "genesis hash found!"
-  print "nonce: "        + str(nonce)
-  print "genesis hash: " + genesis_hash.encode('hex_codec')
-  print()
-  print "const char* pszTimestamp = \"" + options.timestamp + "\";"
-  print()
-  print "txNew.vin[0].scriptSig = CScript() << " + str(hex(options.bits)) + " << CScriptNum(4) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));"
-  print()
-  print "txNew.vout[0].scriptPubKey = CScript() << ParseHex(\"" + options.pubkey + "\") << OP_CHECKSIG;"
-  print()
-  print "genesis.nTime = " + str(options.time) + ";"
-  print "genesis.nBits = " + str(hex(options.bits)) + ";"
-  print "genesis.nNonce = " + str(nonce) + ";"
-  print()
-  print "assert(hashGenesisBlock == uint256(\"0x" + genesis_hash.encode('hex_codec') + "\"));"
-  print "assert(genesis.hashMerkleRoot == uint256(\"0x" + hash_merkle_root[::-1].encode('hex_codec') + "\"));" 
-  print()
-  print "static Checkpoints::MapCheckpoints mapCheckpoints ="
-  print "    boost::assign::map_list_of(0, uint256(\"0x" + genesis_hash.encode('hex_codec') + "\"));"
-  print()
-  print "    " + str(options.time) + ", // * UNIX timestamp of last checkpoint block"
+  print ("genesis hash found!")
+  print ("nonce: "        + str(nonce))
+  print ("genesis hash: " + genesis_hash.encode('hex_codec'))
+  print ()
+  print ("const char* pszTimestamp = \"" + options.timestamp + "\";")
+  print ()
+#  print "txNew.vin[0].scriptSig = CScript() << " + str(hex(options.bits)) + " << CScriptNum(4) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));"
+  print ()
+ # print "txNew.vout[0].scriptPubKey = CScript() << ParseHex(\"" + options.pubkey + "\") << OP_CHECKSIG;"
+  print ()
+  print ("genesis.nTime = " + str(options.time) + ";")
+  print ("genesis.nBits = " + str(hex(options.bits)) + ";")
+  print ("genesis.nNonce = " + str(nonce) + ";")
+  print ()
+  print ("assert(hashGenesisBlock == uint256(\"0x" + genesis_hash.encode('hex_codec') + "\"));")
+  print ("assert(genesis.hashMerkleRoot == uint256(\"0x" + hash_merkle_root[::-1].encode('hex_codec') + "\"));")
+  print ()
+  print ("static Checkpoints::MapCheckpoints mapCheckpoints =")
+  print ("    boost::assign::map_list_of(0, uint256(\"0x" + genesis_hash.encode('hex_codec') + "\"));")
+  print ()
+  print ("    " + str(options.time) + ", // * UNIX timestamp of last checkpoint block")
 
 # GOGOGO!
 main()
