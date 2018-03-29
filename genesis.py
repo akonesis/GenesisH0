@@ -1,6 +1,5 @@
 from __future__ import print_function
 import hashlib, binascii, struct, array, os, time, sys, optparse
-import hexdump
 #import scrypt
 
 from construct import *
@@ -15,19 +14,14 @@ def main():
   output_script = create_output_script(options)
   # hash merkle root is the double sha256 hash of the transaction(s)
   tx = create_transaction(input_script, output_script,options)
-  print ('tx == ' + tx.encode('hex'))
-  print (":".join("{:02x}".format(ord(c)) for c in tx))
-  hexdump.dump(tx, sep=' ')
-  print ('\n')
-  for i in range(0, len(tx)):      
+  
+  if options.debug
+    for i in range(0, len(tx)):      
     if (i % 16 == 0):
         print ()  
     mm = int(tx[i].encode('hex'), 16)
-#    print (hex(mm), sep=':', end=' ' )
     print ('0x{0:0{1}x} '.format(mm,2), end='')
-
-
-  print ('\n')
+    print ('\n')
 
   hash_merkle_root = hashlib.sha256(hashlib.sha256(tx).digest()).digest()
   print_block_info(options, hash_merkle_root)
@@ -143,8 +137,7 @@ def create_transaction(input_script, output_script, options):
   tx.prev_out_idx      = 0xFFFFFFFF
   tx.input_script_len  = len(input_script)
   tx.input_script      = input_script
-  if options.mota:
-    tx.sequence          = 0xFFFFFFFF
+  tx.sequence          = 0xFFFFFFFF
   tx.num_outputs       = 1
   tx.out_value         = struct.pack('<q' ,options.value)#0x000005f5e100)#012a05f200) #50 coins
   #tx.out_value         = struct.pack('<q' ,0x000000012a05f200) #50 coins
