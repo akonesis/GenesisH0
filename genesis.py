@@ -12,6 +12,7 @@ def main():
     options.pubkey = ''
     options.version = 1
     options.bits = 504365055
+    options.value = 0
 
   algorithm = get_algorithm(options)
 
