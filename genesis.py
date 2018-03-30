@@ -10,29 +10,38 @@ def main():
   
   if options.mota:
     options.pubkey = ''
+    options.version = 1
+    options.bits = 504365055
 
   algorithm = get_algorithm(options)
 
   input_script  = create_input_script(options)
   output_script = create_output_script(options)
   # hash merkle root is the double sha256 hash of the transaction(s)
-  tx = create_transaction(input_script, output_script,options)
-  
+  tx = create_transaction(input_script, output_script,options)  
   if options.debug:
-    for i in range(0, len(tx)):
-        if (i % 16 == 0):
-          print ()  
-        mm = int(tx[i].encode('hex'), 16)
-        print ('0x{0:0{1}x} '.format(mm,2), end='')
-    print ('\n')
+    print ('tx:', end='')
+    print_hex(tx)
 
   hash_merkle_root = hashlib.sha256(hashlib.sha256(tx).digest()).digest()
   print_block_info(options, hash_merkle_root)
 
-  block_header        = create_block_header(hash_merkle_root, options.time, options.bits, options.nonce)
+  block_header        = create_block_header(hash_merkle_root, options.time, options.bits, options.nonce, options.version)
+  if options.debug:
+    print ()
+    print ('block_header:', end='')
+    print_hex(block_header)
+
   genesis_hash, nonce = generate_hash(block_header, algorithm, options.nonce, options.bits)
   announce_found_genesis(genesis_hash, nonce, options, hash_merkle_root)
 
+def print_hex(data):
+  for i in range(0, len(data)):
+      if (i % 16 == 0):
+        print ()  
+      mm = int(data[i].encode('hex'), 16)
+      print ('0x{0:0{1}x} '.format(mm,2), end='')
+  print ('\n')
 
 def get_args():
   parser = optparse.OptionParser()
@@ -48,6 +57,8 @@ def get_args():
                    type="string", help="the pubkey found in the output script")
   parser.add_option("-v", "--value", dest="value", default=5000000000,
                    type="int", help="the value in coins for the output, full value (exp. in bitcoin 5000000000 - To get other coins value: Block Value * 100000000)")
+  parser.add_option("-r", "--version", dest="value", default=4,
+                   type="int", help="cblock version")
   parser.add_option("-b", "--bits", dest="bits",
                    type="int", help="the target in compact representation, associated to a difficulty of 1")
   parser.add_option("-d", "--debug", action="store_true", dest="debug")
@@ -130,10 +141,10 @@ def create_transaction(input_script, output_script, options):
   tx.locktime          = 0
   return transaction.build(tx)
 
-def create_block_header(hash_merkle_root, time, bits, nonce):
+def create_block_header(hash_merkle_root, time, bits, nonce, version):
   """ Create header's block """
   block_header = Struct("block_header",
-    Bytes("version",4),
+    Bytes("version", 4),
     Bytes("hash_prev_block", 32),
     Bytes("hash_merkle_root", 32),
     Bytes("time", 4),
@@ -141,7 +152,7 @@ def create_block_header(hash_merkle_root, time, bits, nonce):
     Bytes("nonce", 4))
 
   genesisblock = block_header.parse('\x00'*80)
-  genesisblock.version          = struct.pack('<I', 1)
+  genesisblock.version          = struct.pack('<I', version)
   genesisblock.hash_prev_block  = struct.pack('<qqqq', 0,0,0,0)
   genesisblock.hash_merkle_root = hash_merkle_root
   genesisblock.time             = struct.pack('<I', time)
