@@ -13,6 +13,7 @@ def main():
     options.version = 1
     options.bits = 504365055
     options.value = 0
+    options.txtime = 1521404888
 
   algorithm = get_algorithm(options)
 
@@ -46,6 +47,8 @@ def print_hex(data):
 
 def get_args():
   parser = optparse.OptionParser()
+  parser.add_option("-x", "--txtime", dest="txtime", default=int(time.time()),
+                   type="int", help="the (unix) time when the transaction is created *must be fixed for mota, not used for others")
   parser.add_option("-t", "--time", dest="time", default=int(time.time()),
                    type="int", help="the (unix) time when the genesisblock is created")
   parser.add_option("-z", "--timestamp", dest="timestamp", default="The Times 03/Jan/2009 Chancellor on brink of second bailout for banks",
@@ -109,25 +112,47 @@ def create_output_script(options):
 
 def create_transaction(input_script, output_script, options):
   """ Creates a transaction block from input and output scripts """
-   
-  transaction = Struct("transaction",
-  Bytes("version", 4),
-  Bytes('time', 4),
-  Byte("num_inputs"),
-  StaticField("prev_output", 32),
-  UBInt32('prev_out_idx'),
-  Byte('input_script_len'),
-  Bytes('input_script', len(input_script)),
-  UBInt32('sequence'),
-  Byte('num_outputs'),
-  Bytes('out_value', 8),
-  Byte('output_script_len'),
-  Bytes('output_script', len(output_script)),
-  UBInt32('locktime'))
 
-  tx = transaction.parse('\x00'*(127 + len(input_script)))
+  if options.mota:
+    transaction = Struct("transaction",
+    Bytes("version", 4),
+    Bytes('time', 4),
+    Byte("num_inputs"),
+    StaticField("prev_output", 32),
+    UBInt32('prev_out_idx'),
+    Byte('input_script_len'),
+    Bytes('input_script', len(input_script)),
+    UBInt32('sequence'),
+    Byte('num_outputs'),
+    Bytes('out_value', 8),
+    Byte('output_script_len'),
+    Bytes('output_script', len(output_script)),
+    UBInt32('locktime'))
+  else:
+    transaction = Struct("transaction",
+    Bytes("version", 4),
+    Byte("num_inputs"),
+    StaticField("prev_output", 32),
+    UBInt32('prev_out_idx'),
+    Byte('input_script_len'),
+    Bytes('input_script', len(input_script)),
+    UBInt32('sequence'),
+    Byte('num_outputs'),
+    Bytes('out_value', 8),
+    Byte('output_script_len'),
+    Bytes('output_script', len(output_script)),
+    UBInt32('locktime'))
+
+  if options.mota:
+    tx = transaction.parse('\x00'*(131 + len(input_script)))
+  else:
+    tx = transaction.parse('\x00'*(127 + len(input_script)))
+
   tx.version           = struct.pack('<I', 1)
-  tx.time              = struct.pack('<I', options.time)
+  
+  if options.mota:
+    tx.time              = struct.pack('<I', options.txtime)
+      
   tx.num_inputs        = 1
   tx.prev_output       = struct.pack('<qqqq', 0,0,0,0)
   tx.prev_out_idx      = 0xFFFFFFFF
