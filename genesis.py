@@ -61,7 +61,7 @@ def get_args():
                    type="string", help="the pubkey found in the output script")
   parser.add_option("-v", "--value", dest="value", default=5000000000,
                    type="int", help="the value in coins for the output, full value (exp. in bitcoin 5000000000 - To get other coins value: Block Value * 100000000)")
-  parser.add_option("-r", "--version", dest="version", default=4,
+  parser.add_option("-r", "--version", dest="version", default=1,
                    type="int", help="cblock version")
   parser.add_option("-b", "--bits", dest="bits",
                    type="int", help="the target in compact representation, associated to a difficulty of 1")
