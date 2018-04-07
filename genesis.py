@@ -70,14 +70,14 @@ def get_args():
 
   (options, args) = parser.parse_args()
   if not options.bits:
-    if options.algorithm in ["quark-hash", "argon2-hash", "scrypt", "X11", "X13", "X15"]:
+    if options.algorithm in ["quark-hash", "argon2-hash", "scrypt", "X11", "X13", "X15", "lyra2z"]:
       options.bits = 0x1e0ffff0
     else:
       options.bits = 0x1d00ffff
   return options
 
 def get_algorithm(options):
-  supported_algorithms = ["SHA256", "quark-hash", "argon2-hash", "scrypt", "X11", "X13", "X15"]
+  supported_algorithms = ["SHA256", "quark-hash", "argon2-hash", "scrypt", "X11", "X13", "X15", "lyra2z"]
   if options.algorithm in supported_algorithms:
     return options.algorithm
   else:
@@ -244,6 +244,12 @@ def generate_hashes_from_block(data_block, algorithm):
     except ImportError:
       sys.exit("Cannot run X15 algorithm: module x15_hash not found")
     header_hash = x15_hash.getPoWHash(data_block)[::-1]
+  elif algorithm == 'lyra2z':
+    try:
+      exec('import %s' % "lyra2z_hash")
+    except ImportError:
+      sys.exit("Cannot run Lyra2Z algorithm: module lyra2z_hash not found")
+    header_hash = lyra2z_hash.getPoWHash(data_block)[::-1]
   return header_hash
 
 def is_genesis_hash(header_hash, target):
