@@ -67,6 +67,7 @@ def get_args():
                    type="int", help="the target in compact representation, associated to a difficulty of 1")
   parser.add_option("-d", "--debug", action="store_true", dest="debug")
   parser.add_option("-m", "--mota", action="store_true", dest="mota")
+  parser.add_option("-e", "--emoji", action="store_true", dest="emoji")
 
   (options, args) = parser.parse_args()
   if not options.bits:
@@ -128,6 +129,21 @@ def create_transaction(input_script, output_script, options):
     Byte('output_script_len'),
     Bytes('output_script', len(output_script)),
     UBInt32('locktime'))
+  elif options.emoji:
+    transaction = Struct("transaction",
+    Bytes("version", 4),
+    Byte("num_inputs"),
+    StaticField("prev_output", 32),
+    UBInt32('prev_out_idx'),
+    Byte('input_script_len'),
+    Bytes('input_script', len(input_script)),
+    UBInt32('sequence'),
+    Byte('num_outputs'),
+    Bytes('out_value', 8),
+    Bytes('out_emoji', 16),
+    Byte('output_script_len'),
+    Bytes('output_script', len(output_script)),
+    UBInt32('locktime'))    
   else:
     transaction = Struct("transaction",
     Bytes("version", 4),
@@ -145,6 +161,8 @@ def create_transaction(input_script, output_script, options):
 
   if options.mota:
     tx = transaction.parse('\x00'*(131 + len(input_script)))
+  elif options.emoji:
+    tx = transaction.parse('\x00'*(143 + len(input_script)))
   else:
     tx = transaction.parse('\x00'*(127 + len(input_script)))
 
@@ -160,8 +178,13 @@ def create_transaction(input_script, output_script, options):
   tx.input_script      = input_script
   tx.sequence          = 0xFFFFFFFF
   tx.num_outputs       = 1
+  
+  # see https://docs.python.org/2/library/struct.html - q is long long
   tx.out_value         = struct.pack('<q' ,options.value)#0x000005f5e100)#012a05f200) #50 coins
   #tx.out_value         = struct.pack('<q' ,0x000000012a05f200) #50 coins
+  if options.emoji:
+    tx.out_emoji       = struct.pack('<llll', 0,0,0,0)
+    
   tx.output_script_len = len(output_script)
   tx.output_script     = output_script
   tx.locktime          = 0
